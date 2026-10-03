@@ -1136,11 +1136,15 @@ function showUrgent() {
   const hasUrgent = tasks.some((t) => !t.done &&
     (urgency(t) === 'overdue' || urgency(t) === 'today'));
   if (!hasUrgent) return;
+  // Leave whatever panel is open and go back to the list.
+  showSettings = false;
+  showGithub = false;
+  showAbout = false;
+  focusId = null;
   currentTab = 'active';
   document.querySelectorAll('.tab').forEach((b) =>
     b.classList.toggle('is-active', b.dataset.tab === 'active'));
   currentFilter = 'urgent';
-  focusId = null;
   render();
 }
 

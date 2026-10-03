@@ -365,7 +365,9 @@ body.locked .topbar { -webkit-app-region: no-drag; }
 
 .focus-body { overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; padding-bottom: 8px; }
 .focus-body::-webkit-scrollbar { width: 6px; }
-.focus-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.focus-body::-webkit-scrollbar-track { background: transparent; }
+.focus-body::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.focus-body:hover::-webkit-scrollbar-thumb { background: var(--line); }
 
 .field { margin-bottom: 12px; }
 .field label { display: block; font-size: 11px; color: var(--text-soft); margin-bottom: 4px; }
@@ -706,6 +708,10 @@ label.set-row { cursor: pointer; }
   animation: fade var(--speed) ease;
 }
 .about-body { overflow-y: auto; overflow-x: hidden; flex: 1 1 auto; text-align: center; }
+.about-body::-webkit-scrollbar { width: 6px; }
+.about-body::-webkit-scrollbar-track { background: transparent; }
+.about-body::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.about-body:hover::-webkit-scrollbar-thumb { background: var(--line); }
 .about-head { margin: 6px 0 16px; }
 .about-icon { display: inline-block; }
 .about-app { font-size: 18px; font-weight: 700; margin-top: 8px; }
