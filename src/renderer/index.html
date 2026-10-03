@@ -220,11 +220,14 @@
       <div class="qa-chips" id="qaChips" hidden>
         <button type="button" class="chip is-active" data-when="today">Today</button>
         <button type="button" class="chip" data-when="tomorrow">Tomorrow</button>
-        <label class="chip chip-cal" title="Pick a custom date">
-          <span class="chip-cal-label">Date</span>
-          <input type="date" id="qaDate" />
+        <label class="chip chip-cal" title="Pick a date">
+          <span id="qaDateLabel">Date</span>
+          <input type="date" id="qaDate" class="chip-input" tabindex="-1" aria-label="Deadline date" />
         </label>
-        <input type="time" id="qaTime" class="chip-time" title="Set a time (optional)" aria-label="Time (optional)" />
+        <label class="chip" title="Set a time (optional)">
+          <span id="qaTimeLabel">Time</span>
+          <input type="time" id="qaTime" class="chip-input" tabindex="-1" aria-label="Deadline time" />
+        </label>
       </div>
       <div class="qa-main">
         <input type="text" id="qaTitle" placeholder="Add a task…" maxlength="200" />

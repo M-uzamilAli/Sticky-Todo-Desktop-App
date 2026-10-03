@@ -796,23 +796,15 @@ label.set-row { cursor: pointer; }
   background: var(--bg-raised); color: var(--text);
   border-color: var(--text-soft);
 }
-/* Calendar chip wraps a hidden-ish native date input */
-.chip-cal { position: relative; padding: 0 12px; }
-.chip-cal-label { font-size: 11px; }
-.chip-cal input[type="date"] {
+/* Chips lay out as an even 2-per-row grid that holds at the min width */
+.qa-chips .chip { flex: 1 1 40%; justify-content: center; position: relative; }
+.qa-chips .chip > span { pointer-events: none; }  /* clicks pass through to the input */
+/* Native date/time input covers its chip, invisible, so the picker anchors here */
+.chip-input {
   position: absolute; inset: 0;
-  opacity: 0; width: 100%; height: 100%;
-  border: none; cursor: pointer;
-}
-.chip-time {
-  height: 26px; width: 84px;
-  background: transparent;
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 0 6px;
-  font-size: 11px;
-  user-select: text; -webkit-user-select: text;
+  width: 100%; height: 100%;
+  margin: 0; padding: 0; border: 0;
+  opacity: 0; cursor: pointer;
 }
 
 /* Dark-theme native date/time pickers */

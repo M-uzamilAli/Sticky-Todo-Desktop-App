@@ -804,6 +804,15 @@ function setQuickWhen(when) {
   qaChips.querySelector('.chip-cal').classList.toggle('is-active', when === 'custom');
 }
 
+// Clear any stale date/time selection back to the default (Today, no time).
+function resetQuickDefaults() {
+  el('qaDate').value = todayStr();
+  el('qaTime').value = '';
+  el('qaDateLabel').textContent = 'Date';
+  el('qaTimeLabel').textContent = 'Time';
+  setQuickWhen('today');
+}
+
 async function addFromQuickAdd(e) {
   e.preventDefault();
   const title = el('qaTitle').value.trim();
@@ -1220,18 +1229,51 @@ function wire() {
 
   // Quick-add
   el('quickAdd').addEventListener('submit', addFromQuickAdd);
-  // Reveal the deadline chips while the add bar is in use; hide when it's idle.
-  quickAdd.addEventListener('focusin', () => { qaChips.hidden = false; });
-  quickAdd.addEventListener('focusout', () => {
-    setTimeout(() => {
-      if (!quickAdd.contains(document.activeElement) && !el('qaTitle').value.trim()) {
-        qaChips.hidden = true;
-      }
-    }, 120);
+
+  // Clicking dead space inside the bar (gaps/padding) must not blur the field.
+  quickAdd.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('input, button, label, textarea')) e.preventDefault();
   });
+
+  // Reveal the deadline chips while the add bar is in use; hide + reset when idle.
+  let qaBlurTimer = null;
+  let qaPickerOpen = false;
+
+  quickAdd.addEventListener('focusin', () => {
+    clearTimeout(qaBlurTimer);
+    qaChips.hidden = false;
+  });
+  quickAdd.addEventListener('focusout', () => {
+    clearTimeout(qaBlurTimer);
+    qaBlurTimer = setTimeout(() => {
+      if (qaPickerOpen) return;                          // a date/time picker is open — keep chips
+      if (quickAdd.contains(document.activeElement)) return; // focus still in the bar
+      if (el('qaTitle').value.trim()) return;            // mid-typing a task
+      qaChips.hidden = true;
+      resetQuickDefaults();                              // clear stale date/time selection
+    }, 200);
+  });
+
   qaChips.querySelectorAll('.chip[data-when]').forEach((c) =>
     c.addEventListener('click', () => { setQuickWhen(c.dataset.when); el('qaTitle').focus(); }));
-  el('qaDate').addEventListener('change', () => { if (el('qaDate').value) setQuickWhen('custom'); });
+
+  // Date / Time chips: any click opens the picker (anchored at the chip), consistently.
+  const forcePicker = (input) => { qaPickerOpen = true; try { input.showPicker(); } catch (e) { /* native still focuses */ } };
+  el('qaDate').addEventListener('click', () => forcePicker(el('qaDate')));
+  el('qaTime').addEventListener('click', () => forcePicker(el('qaTime')));
+  [el('qaDate'), el('qaTime')].forEach((inp) =>
+    inp.addEventListener('blur', () => { qaPickerOpen = false; }));
+  el('qaDate').addEventListener('change', () => {
+    qaPickerOpen = false;
+    if (el('qaDate').value) {
+      setQuickWhen('custom');
+      el('qaDateLabel').textContent = shortDate(new Date(el('qaDate').value + 'T00:00'));
+    }
+  });
+  el('qaTime').addEventListener('change', () => {
+    qaPickerOpen = false;
+    el('qaTimeLabel').textContent = el('qaTime').value ? to12h(el('qaTime').value) : 'Time';
+  });
 
   // Focus back
   el('backBtn').addEventListener('click', focusBack);
