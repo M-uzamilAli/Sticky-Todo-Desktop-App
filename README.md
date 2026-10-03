@@ -8,6 +8,14 @@ your assigned **ClickUp** tasks and **GitHub** PRs & comments, so the answer to
 
 ---
 
+## Download
+
+Grab the latest Windows installer from the
+**[Releases page](https://github.com/M-uzamilAli/Sticky-Todo-Desktop-App/releases/latest)**
+(`Sticky Todo Setup 1.0.0.exe`). Run it, and the app lives in your system tray.
+
+---
+
 ## Why this exists
 
 Every morning I'd sit down, scribble on a desktop sticky note what I needed to chase,
@@ -63,7 +71,13 @@ due today, which PRs are green, and whether anyone's waiting on me.
 - Notification strip summarising urgency; **native desktop notifications** when a task
   becomes overdue or is due within an hour
 - Animated complete, slide-out, **undo toast** (complete & delete), drag-to-reorder
+- **Delete confirmation** so nothing vanishes by accident
 - Keyboard: Enter add · Esc back · Delete removes focused · Ctrl+Z undo · Ctrl+1/2/3 tabs
+
+### Focus mode
+- A **Focus** button on any open task starts a session: the rest of the app **blurs out**,
+  the single task takes over, and a **live timer** counts up — one thing at a time
+- Works for your own tasks and imported ClickUp tasks; **Done** completes & exits, **Esc** leaves
 
 ### ClickUp (one-way import)
 - Imports tasks **assigned to you** (open, across the whole workspace)
@@ -182,4 +196,19 @@ on save and only reads it at launch).
 - `contextIsolation` on, `nodeIntegration` off, a strict CSP, and a preload bridge —
   the renderer only talks to the main process through `window.todo`.
 - Single-instance lock; a second launch just reveals the window.
-```
+- Pure HTML/CSS/vanilla JS renderer; no frontend framework.
+
+---
+
+## Author
+
+Made by **Muzamil Ali** — AI Engineer & Full-Stack Developer, CS student at
+FAST-NUCES Karachi. (There's an in-app **About · Credits** page under Settings too.)
+
+- Website: https://muzamilali.online
+- GitHub: https://github.com/M-uzamilAli
+- LinkedIn: https://www.linkedin.com/in/muzamil-ali-b771aa356
+
+## License
+
+MIT
