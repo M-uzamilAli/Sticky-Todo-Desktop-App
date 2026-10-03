@@ -1,0 +1,51 @@
+{
+  "name": "sticky-todo",
+  "version": "1.0.0",
+  "description": "A minimal sticky-note style desktop to-do widget built with Electron.",
+  "main": "src/main/main.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "pack": "electron-builder --dir",
+    "make-icons": "node scripts/make-icons.js"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.stickytodo.app",
+    "productName": "Sticky Todo",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "build/**/*"
+    ],
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": ["en-US"],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sticky Todo"
+    }
+  }
+}
