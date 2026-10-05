@@ -12,7 +12,7 @@ your assigned **ClickUp** tasks and **GitHub** PRs & comments, so the answer to
 
 Grab the latest Windows installer from the
 **[Releases page](https://github.com/M-uzamilAli/Sticky-Todo-Desktop-App/releases/latest)**
-(`Sticky Todo Setup 1.0.1.exe`). Run it, and the app lives in your system tray.
+(`Sticky Todo Setup 1.0.2.exe`). Run it, and the app lives in your system tray.
 
 ---
 
@@ -148,10 +148,19 @@ npm run make-icons
 npm run dist
 ```
 
-The NSIS installer is produced in **`release/`** (e.g. `Sticky Todo Setup 1.0.1.exe`).
+The NSIS installer is produced in **`release/`** (e.g. `Sticky Todo Setup 1.0.2.exe`).
 Build is configured for a smaller footprint: single `en-US` locale, `asar` packaging,
 and maximum compression. Replace `build/icon.png` / `build/tray.png` with your own
 256×256 / 32×32 PNGs to rebrand.
+
+### Google Classroom credentials
+
+Classroom import uses a Google OAuth **Desktop** client. The real credentials live
+in `src/main/credentials.json`, which is git-ignored (so it never lands in the public
+repo) but is still bundled into the packaged app. To build with Classroom enabled,
+copy `src/main/credentials.example.json` to `src/main/credentials.json` and fill in
+your own `clientId` / `clientSecret`. Without it, every other feature works and
+Classroom stays disabled until you add credentials (or paste them in Settings).
 
 ---
 

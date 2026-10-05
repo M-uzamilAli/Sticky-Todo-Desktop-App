@@ -15,3 +15,6 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# Secrets — Google OAuth Desktop client (bundled into builds, never committed)
+src/main/credentials.json

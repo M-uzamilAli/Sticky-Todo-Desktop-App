@@ -29,6 +29,11 @@ contextBridge.exposeInMainWorld('todo', {
   // GitHub
   fetchGithub: () => ipcRenderer.invoke('fetch-github'),
 
+  // Google Classroom
+  classroomConnect: () => ipcRenderer.invoke('classroom-connect'),
+  classroomSync: () => ipcRenderer.invoke('classroom-sync'),
+  classroomDisconnect: () => ipcRenderer.invoke('classroom-disconnect'),
+
   // Window controls
   minimize: () => ipcRenderer.send('win-minimize'),
   hide: () => ipcRenderer.send('win-hide'),

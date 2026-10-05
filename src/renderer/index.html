@@ -14,22 +14,26 @@
     <header class="topbar" id="topbar">
       <span class="brand">Sticky Todo</span>
       <div class="win-controls">
-        <button class="win-btn" id="pinBtn" title="Always on top" aria-label="Always on top">📌</button>
-        <button class="win-btn" id="lockBtn" title="Lock position" aria-label="Lock position">🔓</button>
-        <button class="win-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">🌙</button>
-        <button class="win-btn" id="syncBtn" title="Sync ClickUp" aria-label="Sync ClickUp" hidden>
-          <svg class="cu-icon" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M2.2 18.1l3.7-2.8c1.9 2.6 4 3.7 6.1 3.7 2.1 0 4.1-1.1 6-3.6l3.8 2.7C19 21.6 15.8 23.5 12 23.5c-3.8 0-7-1.9-9.8-5.4z"/><path fill="currentColor" d="M12 6.2L5.6 11.7 3 8.6 12 .8l9 7.8-2.6 3.1z"/></svg>
-        </button>
         <button class="win-btn" id="githubBtn" title="GitHub" aria-label="GitHub" hidden>
           <svg class="gh-icon" viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 012-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           <span class="win-badge" id="githubBadge" hidden></span>
         </button>
-        <button class="win-btn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button>
-        <button class="win-btn" id="compactBtn" title="Compact view" aria-label="Compact view">▢</button>
+        <button class="win-btn" id="moreBtn" title="More" aria-label="More">⋮</button>
         <button class="win-btn" id="minBtn" title="Minimize" aria-label="Minimize">—</button>
         <button class="win-btn" id="closeBtn" title="Hide to tray" aria-label="Hide to tray">✕</button>
       </div>
     </header>
+
+    <!-- Overflow (⋮) menu -->
+    <div class="more-menu" id="moreMenu" hidden>
+      <button class="menu-item" id="syncBtn" hidden><span>Sync tasks</span><span class="menu-state"></span></button>
+      <button class="menu-item" id="settingsBtn"><span>Settings</span><span class="menu-state"></span></button>
+      <div class="menu-sep"></div>
+      <button class="menu-item" id="pinBtn"><span>Always on top</span><span class="menu-state" id="pinState"></span></button>
+      <button class="menu-item" id="lockBtn"><span>Lock position</span><span class="menu-state" id="lockState"></span></button>
+      <button class="menu-item" id="themeBtn"><span>Theme</span><span class="menu-state" id="themeState"></span></button>
+      <button class="menu-item" id="compactBtn"><span>Compact view</span><span class="menu-state" id="compactState"></span></button>
+    </div>
 
     <!-- 2. Notification strip -->
     <button class="strip" id="strip" aria-live="polite" title="Show urgent tasks">
@@ -41,21 +45,38 @@
     <!-- Main view: list (hidden when focus mode is on) -->
     <section class="list-view" id="listView">
 
-      <!-- 3. Tabs (segmented control) -->
-      <nav class="tabs" id="tabs">
-        <button class="tab is-active" data-tab="active">Active <span class="tab-count" id="countActive"></span></button>
-        <button class="tab" data-tab="done">Done <span class="tab-count" id="countDone"></span></button>
-        <button class="tab" data-tab="all">All <span class="tab-count" id="countAll"></span></button>
-      </nav>
+      <!-- 3. Tabs + filter toggle -->
+      <div class="tabrow">
+        <nav class="tabs" id="tabs">
+          <button class="tab is-active" data-tab="active">Active <span class="tab-count" id="countActive"></span></button>
+          <button class="tab" data-tab="done">Done</button>
+          <button class="tab" data-tab="all">All</button>
+        </nav>
+        <button class="filter-toggle" id="filterToggle" title="Filters" aria-label="Filters">Filter</button>
+      </div>
 
-      <!-- 4. Filter row -->
-      <div class="filters" id="filters">
-        <button class="filter is-active" data-filter="all">All</button>
-        <button class="filter" data-filter="week">Week</button>
-        <div class="week-nav" id="weekNav" hidden>
-          <button class="week-arrow" id="weekPrev" aria-label="Previous week">‹</button>
-          <button class="week-label" id="weekLabel" title="Jump to this week"></button>
-          <button class="week-arrow" id="weekNext" aria-label="Next week">›</button>
+      <!-- 4. Filter panel (hidden until the Filter button is pressed) -->
+      <div class="filter-panel" id="filterPanel" hidden>
+        <div class="filter-group">
+          <span class="filter-cap">Timeline</span>
+          <div class="filters" id="filters">
+            <button class="filter is-active" data-filter="all">All</button>
+            <button class="filter" data-filter="week">Week</button>
+            <div class="week-nav" id="weekNav" hidden>
+              <button class="week-arrow" id="weekPrev" aria-label="Previous week">‹</button>
+              <button class="week-label" id="weekLabel" title="Jump to this week"></button>
+              <button class="week-arrow" id="weekNext" aria-label="Next week">›</button>
+            </div>
+          </div>
+        </div>
+        <div class="filter-group" id="sourceGroup" hidden>
+          <span class="filter-cap">Type</span>
+          <div class="sources" id="sources">
+            <button class="source is-active" data-source="all"><span class="src-label">All</span><span class="src-count" id="scAll"></span></button>
+            <button class="source" data-source="personal"><span class="src-label">Personal</span><span class="src-count" id="scPersonal"></span></button>
+            <button class="source" data-source="clickup" hidden><span class="src-label">ClickUp</span><span class="src-count" id="scClickup"></span></button>
+            <button class="source" data-source="classroom" hidden><span class="src-label">Classroom</span><span class="src-count" id="scClassroom"></span></button>
+          </div>
         </div>
       </div>
 
@@ -162,6 +183,15 @@
           <p class="set-note">Create a token in GitHub → Settings → Developer settings. Classic: scopes <b>repo</b> + <b>notifications</b>. Used to show your PRs and comments.</p>
         </div>
 
+        <h3 class="set-group">Google Classroom</h3>
+        <div class="set-stack">
+          <div class="set-actions">
+            <button class="set-btn" id="btnGcConnect">Connect with Google</button>
+            <button class="set-btn" id="btnGcDisconnect" hidden>Disconnect</button>
+          </div>
+          <p class="set-note" id="gcStatus">Sign in with your Google account to import your Classroom assignments and their due dates.</p>
+        </div>
+
         <h3 class="set-group">Data</h3>
         <div class="set-actions">
           <button class="set-btn" id="btnClearCompleted">Clear completed</button>
@@ -172,7 +202,7 @@
         <h3 class="set-group">About</h3>
         <div class="set-stack">
           <button class="set-btn" id="btnAbout">About · Credits</button>
-          <p class="set-note">Sticky Todo v1.0.1 — made by Muzamil Ali</p>
+          <p class="set-note">Sticky Todo v1.0.2 — made by Muzamil Ali</p>
         </div>
       </div>
     </section>
@@ -193,7 +223,7 @@
             <path d="M84 120 l26 28 l50 -58" fill="none" stroke="#3a3320" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <div class="about-app">Sticky Todo</div>
-          <div class="about-ver">Version 1.0.1</div>
+          <div class="about-ver">Version 1.0.2</div>
         </div>
 
         <p class="about-blurb">A glance surface for the day. Personal notes with real deadlines, plus your ClickUp tasks and GitHub PRs, in one small always-on sticky.</p>
@@ -229,10 +259,13 @@
           <input type="time" id="qaTime" class="chip-input" tabindex="-1" aria-label="Deadline time" />
         </label>
       </div>
-      <div class="qa-main">
+      <div class="qa-main" id="qaMain" hidden>
         <input type="text" id="qaTitle" placeholder="Add a task…" maxlength="200" />
         <button type="submit" id="qaAdd" aria-label="Add task">+</button>
       </div>
+      <button type="button" class="qa-open" id="qaOpen" title="Add task (press N)" aria-label="Add task">
+        <span class="qa-open-plus">+</span> Add task
+      </button>
     </form>
 
     <!-- Focus session overlay -->

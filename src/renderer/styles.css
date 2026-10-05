@@ -124,12 +124,31 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 }
 .win-btn:hover { background: var(--bg-raised); color: var(--text); }
 #closeBtn:hover { background: var(--overdue); color: #fff; }
-#pinBtn.is-on,
-#lockBtn.is-on,
-#compactBtn.is-on { color: var(--accent); background: var(--bg-raised); }
-
 /* When locked, the titlebar no longer drags the window */
 body.locked .topbar { -webkit-app-region: no-drag; }
+
+/* ⋮ overflow menu */
+.more-menu {
+  position: absolute; top: 36px; right: 8px; z-index: 60;
+  min-width: 180px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 4px;
+  -webkit-app-region: no-drag;
+  animation: fade var(--speed) ease;
+}
+.menu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px; color: var(--text); text-align: left;
+  transition: background var(--speed);
+}
+.menu-item:hover { background: var(--bg-input); }
+.menu-state { font-size: 11px; color: var(--accent); min-width: 44px; text-align: right; }
+.menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
 
 /* ============================================================
    2. Notification strip
@@ -173,18 +192,22 @@ body.locked .topbar { -webkit-app-region: no-drag; }
 /* ============================================================
    3. Tabs
    ============================================================ */
-/* Segmented control */
+/* Tab row: shrunk segmented control + a compact Filter button */
+.tabrow {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0 10px 8px;
+  flex: 0 0 auto;
+}
 .tabs {
-  display: flex; margin: 0 10px 8px; padding: 2px;
+  display: flex; flex: 1 1 auto; padding: 2px;
   background: var(--bg-raised);
   border-radius: var(--radius-sm);
-  flex: 0 0 auto;
 }
 .tab {
   flex: 1;
-  height: calc(var(--ctl-h) - 4px);
-  display: flex; align-items: center; justify-content: center; gap: 5px;
-  font-size: 12px;
+  height: 24px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  font-size: 11px;
   border-radius: calc(var(--radius-sm) - 2px);
   color: var(--text-soft);
   transition: background var(--speed), color var(--speed);
@@ -195,12 +218,43 @@ body.locked .topbar { -webkit-app-region: no-drag; }
 .tab.is-active .tab-count { opacity: .9; }
 .tab-count:empty { display: none; }
 
+.filter-toggle {
+  flex: 0 0 auto;
+  height: 28px; padding: 0 10px;
+  font-size: 11px;
+  border-radius: var(--radius-sm);
+  color: var(--text-soft);
+  background: var(--bg-raised);
+  border: 1px solid transparent;
+  transition: background var(--speed), color var(--speed), border-color var(--speed);
+}
+.filter-toggle:hover { color: var(--text); }
+.filter-toggle.is-active {
+  color: var(--text); border-color: var(--line);
+}
+/* Dot marking a non-default filter is applied */
+.filter-toggle.is-active::after {
+  content: ''; display: inline-block;
+  width: 5px; height: 5px; margin-left: 5px; vertical-align: middle;
+  border-radius: 50%; background: var(--accent);
+}
+
+/* Filter panel — tucked away behind the Filter button until needed */
+.filter-panel { flex: 0 0 auto; animation: fade var(--speed) ease; }
+
 /* ============================================================
    4. Filters
    ============================================================ */
+/* Each filter row gets a tiny caption so its purpose reads at a glance */
+.filter-group { padding: 0 10px 8px; }
+.filter-cap {
+  display: block;
+  font-size: 9px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-soft); opacity: .7;
+  margin: 0 2px 5px;
+}
 .filters {
   display: flex; align-items: center; gap: 6px;
-  padding: 0 10px 10px;
   flex: 0 0 auto;
 }
 .filter {
@@ -215,6 +269,31 @@ body.locked .topbar { -webkit-app-region: no-drag; }
 .filter.is-active {
   background: var(--bg-raised); color: var(--text);
   border-color: var(--line);
+}
+
+/* Source filter pills — single row, equal share of the full width */
+.sources {
+  display: flex; flex-wrap: nowrap; gap: 6px;
+  flex: 0 0 auto;
+}
+.source {
+  flex: 1 1 0; min-width: 0;
+  height: 24px; padding: 0 4px;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  font-size: 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-soft);
+  background: var(--bg-raised);
+  border: 1px solid transparent;
+  transition: background var(--speed), color var(--speed), border-color var(--speed);
+}
+.src-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.src-count { font-size: 9px; opacity: .6; flex: 0 0 auto; }
+.src-count:empty { display: none; }
+.source:hover { color: var(--text); }
+.source.is-active {
+  background: var(--bg-input); color: var(--text); font-weight: 600;
+  border-color: var(--text-soft);
 }
 
 .week-nav { display: flex; align-items: center; gap: 2px; margin-left: auto; }
@@ -318,8 +397,9 @@ body.locked .topbar { -webkit-app-region: no-drag; }
 }
 .task.done .task-title { text-decoration: line-through; color: var(--text-soft); }
 .task-meta { font-size: 11px; color: var(--text-soft); margin-top: 2px; }
-.task-meta.overdue { color: var(--overdue); font-weight: 600; }
-.task-meta.today { color: var(--today); font-weight: 600; }
+/* Overdue: the red left stripe carries the signal; keep the text quiet gray. */
+.task-meta.overdue { color: var(--text-soft); font-weight: 400; }
+.task-meta.today { color: var(--text); font-weight: 500; }
 
 /* Drag handle: hidden at rest, revealed on row hover */
 .grip {
@@ -333,8 +413,8 @@ body.locked .topbar { -webkit-app-region: no-drag; }
 
 /* ---- Compact summary view: strip chrome, densify the list ---- */
 .note.compact .strip,
-.note.compact .tabs,
-.note.compact .filters,
+.note.compact .tabrow,
+.note.compact .filter-panel,
 .note.compact .quick-add { display: none; }
 .note.compact .task { padding: 6px 8px; margin-bottom: 4px; }
 .note.compact .task .grip { display: none; }
@@ -748,11 +828,29 @@ label.set-row { cursor: pointer; }
    ============================================================ */
 .quick-add {
   display: flex; flex-direction: column; gap: 8px;
-  padding: 10px;
+  padding: 8px 10px;
   border-top: 1px solid var(--line);
   background: var(--bg);
   flex: 0 0 auto;
 }
+
+/* Collapsed state: a small, dim "+ Add task" that stays out of the way */
+.qa-open {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 8px;
+  font-size: 12px; color: var(--text-soft);
+  border-radius: var(--radius-sm);
+  transition: background var(--speed), color var(--speed);
+}
+.qa-open:hover { background: var(--bg-raised); color: var(--text); }
+.qa-open-plus {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 4px;
+  background: var(--bg-input); color: var(--accent);
+  font-size: 14px; line-height: 1;
+}
+
 .qa-main { display: flex; gap: 8px; align-items: center; }
 #qaTitle {
   flex: 1 1 auto; min-width: 0;
@@ -766,17 +864,19 @@ label.set-row { cursor: pointer; }
   user-select: text; -webkit-user-select: text;
 }
 #qaTitle:focus { outline: none; border-color: var(--text-soft); }
+/* Quiet accent: a subtle tile, not the brightest thing in the window */
 #qaAdd {
   flex: 0 0 auto;
   width: var(--ctl-h); height: var(--ctl-h);
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: #fff;
+  background: var(--bg-input);
+  color: var(--accent);
+  border: 1px solid var(--line);
   font-size: 20px; line-height: 0;
-  transition: filter var(--speed);
+  transition: background var(--speed), color var(--speed);
 }
-#qaAdd:hover { filter: brightness(1.08); }
+#qaAdd:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 /* Deadline chips (revealed when the add bar is focused) */
 .qa-chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }

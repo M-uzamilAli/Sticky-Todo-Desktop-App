@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { app, safeStorage } = require('electron');
 
-const TOKEN_KEYS = ['clickupToken', 'githubToken'];
+const TOKEN_KEYS = ['clickupToken', 'githubToken', 'classroomClientSecret', 'classroomRefreshToken'];
 
 // Encrypt a token with the OS keystore (DPAPI on Windows). Prefixed so we can
 // tell encrypted values from legacy plaintext and migrate transparently.
@@ -47,7 +47,11 @@ const DEFAULT_SETTINGS = {
   defaultTab: 'active',       // tab shown on launch: 'active' | 'all'
   clickupToken: '',           // ClickUp personal API token (pk_…); empty = disabled
   clickupDone: {},            // clickupId -> completedAt ISO (local "done" that survives syncs)
-  githubToken: ''             // GitHub Personal Access Token; empty = disabled
+  githubToken: '',            // GitHub Personal Access Token; empty = disabled
+  classroomClientId: '',      // Google OAuth client id (desktop app)
+  classroomClientSecret: '',  // Google OAuth client secret (encrypted)
+  classroomRefreshToken: '',  // Google OAuth refresh token (encrypted); empty = not connected
+  classroomDone: {}           // classroom courseWork id -> completedAt ISO (local done)
 };
 
 const DEFAULT_DATA = {

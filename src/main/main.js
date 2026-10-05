@@ -2,6 +2,7 @@
 
 const path = require('path');
 const crypto = require('crypto');
+const http = require('http');
 const {
   app,
   BrowserWindow,
@@ -34,6 +35,7 @@ let mainWindow = null;
 let tray = null;
 let isQuitting = false;
 let tickTimer = null;
+let userMinimizing = false; // true only when the user clicks the minimize button
 
 // The single in-memory source of truth. All mutations go through here,
 // then persist to disk and broadcast to the renderer.
@@ -267,6 +269,212 @@ async function getGitHub() {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Google Classroom (read-only) — OAuth + coursework import            */
+/* ------------------------------------------------------------------ */
+const GC_SCOPES = [
+  'https://www.googleapis.com/auth/classroom.courses.readonly',
+  'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
+  'https://www.googleapis.com/auth/classroom.student-submissions.me.readonly'
+].join(' ');
+
+// Built-in app credentials (Desktop OAuth client) are loaded from a local,
+// git-ignored credentials.json that ships inside the packaged app. For installed
+// apps Google does not treat the client secret as confidential; keeping it out of
+// the public source just avoids secret-scanning noise and lets each build supply
+// its own. See credentials.example.json. Users can also override per-install via
+// Settings (classroomClientId / classroomClientSecret).
+let GC_CREDS = { clientId: '', clientSecret: '' };
+try {
+  const c = require('./credentials.json');
+  GC_CREDS = {
+    clientId: c.clientId || c.client_id || '',
+    clientSecret: c.clientSecret || c.client_secret || ''
+  };
+} catch (_) { /* no bundled credentials — Classroom disabled until the user adds their own */ }
+const gcClientId = () => state.settings.classroomClientId || GC_CREDS.clientId;
+const gcClientSecret = () => state.settings.classroomClientSecret || GC_CREDS.clientSecret;
+
+let gcAccessToken = null;
+let gcAccessExpiry = 0;
+
+// OAuth 2.0 loopback flow for a desktop app: open consent in the browser,
+// capture the code on 127.0.0.1, exchange it for a refresh token.
+function classroomConnect() {
+  return new Promise((resolve) => {
+    const cid = gcClientId();
+    const secret = gcClientSecret();
+    if (!cid || !secret) {
+      resolve({ ok: false, error: 'No Google credentials configured in this build.' });
+      return;
+    }
+
+    let settled = false;
+    let port;
+    const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+
+    const server = http.createServer(async (req, res) => {
+      const u = new URL(req.url, 'http://127.0.0.1');
+      const code = u.searchParams.get('code');
+      const gerr = u.searchParams.get('error');
+      if (!code && !gerr) { res.writeHead(204); res.end(); return; }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end('<!doctype html><meta charset=utf-8><body style="font-family:system-ui;background:#2a2823;color:#ece7d4;text-align:center;padding-top:64px"><h2 style="color:#e0c15c">Sticky Todo</h2><p>' +
+        (code ? 'Connected to Google Classroom — close this tab and return to the app.' : 'Authorization failed.') + '</p>');
+      server.close();
+      if (gerr || !code) return done({ ok: false, error: gerr || 'No authorization code' });
+      try {
+        const resp = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            code, client_id: cid, client_secret: secret,
+            redirect_uri: 'http://127.0.0.1:' + port, grant_type: 'authorization_code'
+          })
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.refresh_token) {
+          return done({ ok: false, error: data.error_description || data.error || 'No refresh token returned' });
+        }
+        state.settings.classroomRefreshToken = data.refresh_token;
+        gcAccessToken = data.access_token;
+        gcAccessExpiry = Date.now() + ((data.expires_in || 3600) - 60) * 1000;
+        commit();
+        done({ ok: true });
+      } catch (e) { done({ ok: false, error: String(e.message || e) }); }
+    });
+
+    server.on('error', (e) => done({ ok: false, error: String(e.message || e) }));
+    server.listen(0, '127.0.0.1', () => {
+      port = server.address().port;
+      const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+        client_id: cid,
+        redirect_uri: 'http://127.0.0.1:' + port,
+        response_type: 'code',
+        scope: GC_SCOPES,
+        access_type: 'offline',
+        prompt: 'consent'
+      }).toString();
+      shell.openExternal(authUrl);
+    });
+
+    setTimeout(() => { if (!settled) { try { server.close(); } catch (_) {} done({ ok: false, error: 'Timed out waiting for authorization' }); } }, 180000);
+  });
+}
+
+async function gcToken() {
+  if (gcAccessToken && Date.now() < gcAccessExpiry) return gcAccessToken;
+  const refreshToken = state.settings.classroomRefreshToken;
+  if (!refreshToken) throw new Error('Not connected to Classroom');
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: gcClientId(), client_secret: gcClientSecret(),
+      refresh_token: refreshToken, grant_type: 'refresh_token'
+    })
+  });
+  const data = await resp.json();
+  if (!resp.ok || !data.access_token) {
+    // invalid_grant => refresh token expired or revoked
+    throw new Error(data.error === 'invalid_grant' ? 'invalid_grant' : (data.error_description || data.error || 'Token refresh failed'));
+  }
+  gcAccessToken = data.access_token;
+  gcAccessExpiry = Date.now() + ((data.expires_in || 3600) - 60) * 1000;
+  return gcAccessToken;
+}
+
+async function gcGet(apiPath, token) {
+  const res = await fetch('https://classroom.googleapis.com/v1' + apiPath, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`HTTP ${res.status} ${t.slice(0, 120)}`); }
+  return res.json();
+}
+
+// Classroom due dates/times are UTC — convert to the local date/time.
+function gcDeadline(cw) {
+  if (!cw.dueDate) return { deadline: null, deadlineTime: null };
+  const d = cw.dueDate;
+  const t = cw.dueTime;
+  if (t && t.hours != null) {
+    const dt = new Date(Date.UTC(d.year, d.month - 1, d.day, t.hours || 0, t.minutes || 0));
+    return {
+      deadline: `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`,
+      deadlineTime: `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`
+    };
+  }
+  return { deadline: `${d.year}-${pad2(d.month)}-${pad2(d.day)}`, deadlineTime: null };
+}
+
+async function fetchClassroom() {
+  const token = await gcToken();
+  const courses = (await gcGet('/courses?courseStates=ACTIVE&pageSize=100', token)).courses || [];
+  const doneMap = state.settings.classroomDone || {};
+  const out = [];
+
+  for (const course of courses) {
+    let cws = [];
+    try { cws = (await gcGet(`/courses/${course.id}/courseWork?pageSize=100&orderBy=dueDate`, token)).courseWork || []; }
+    catch (e) { continue; }
+    if (!cws.length) continue;
+
+    const subByCw = {};
+    try {
+      const subs = (await gcGet(`/courses/${course.id}/courseWork/-/studentSubmissions?userId=me&pageSize=200`, token)).studentSubmissions || [];
+      for (const s of subs) subByCw[s.courseWorkId] = s.state;
+    } catch (e) { /* no submissions access — treat all as not turned in */ }
+
+    for (const cw of cws) {
+      const { deadline, deadlineTime } = gcDeadline(cw);
+      const turnedIn = ['TURNED_IN', 'RETURNED'].includes(subByCw[cw.id]);
+      const localDone = doneMap[cw.id] || null;
+      const isDone = turnedIn || !!localDone;
+      out.push({
+        id: 'gc-' + cw.id,
+        classroomId: cw.id,
+        source: 'classroom',
+        url: cw.alternateLink || null,
+        listName: course.name || '',
+        title: cw.title || 'Untitled',
+        description: (cw.description || '').trim(),
+        deadline,
+        deadlineTime,
+        done: isDone,
+        completedAt: isDone ? (localDone || new Date().toISOString()) : null,
+        createdAt: cw.creationTime || new Date().toISOString(),
+        notifiedDueSoon: true,
+        notifiedOverdue: true
+      });
+    }
+  }
+  return out;
+}
+
+async function syncClassroom() {
+  if (!state.settings.classroomRefreshToken) return { ok: false, error: 'Not connected' };
+  try {
+    const imported = await fetchClassroom();
+    state.tasks = state.tasks.filter((t) => t.source !== 'classroom').concat(imported);
+    persist();
+    broadcast();
+    return { ok: true, count: imported.length };
+  } catch (err) {
+    const msg = String(err.message || err);
+    if (/invalid_grant/.test(msg)) {
+      // Refresh token expired/revoked — disconnect so the UI prompts a reconnect.
+      // Keep the last-synced assignments visible until the user reconnects.
+      state.settings.classroomRefreshToken = '';
+      gcAccessToken = null;
+      gcAccessExpiry = 0;
+      commit();
+      notify('Google Classroom', 'Sign-in expired — reconnect in Settings.');
+      return { ok: false, expired: true, error: 'Sign-in expired — reconnect in Settings.' };
+    }
+    return { ok: false, error: msg };
+  }
+}
+
 // Replace the previous ClickUp tasks with a fresh pull; local tasks are untouched.
 async function syncClickUp() {
   const token = state.settings.clickupToken;
@@ -325,7 +533,13 @@ function createWindow() {
 
   mainWindow.setAspectRatio(WIN_ASPECT); // keep the sticky-note proportions while resizing
   windowState.manage(mainWindow);
-  mainWindow.on('moved', snapToCorner);
+  // Snap shortly after dragging stops. Use a debounced 'move' because a frameless
+  // window dragged via the CSS drag region doesn't reliably emit 'moved'.
+  let snapTimer = null;
+  mainWindow.on('move', () => {
+    clearTimeout(snapTimer);
+    snapTimer = setTimeout(snapToCorner, 250);
+  });
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
   mainWindow.once('ready-to-show', () => {
@@ -335,6 +549,19 @@ function createWindow() {
     if (state.settings.alwaysOnTop) {
       mainWindow.setAlwaysOnTop(true, 'floating');
     }
+  });
+
+  // "Show desktop" (Win+D) / Win+M minimizes every window. Stay on the desktop by
+  // restoring immediately — unless the user themselves hit the minimize button.
+  mainWindow.on('minimize', () => {
+    if (userMinimizing) { userMinimizing = false; return; }
+    if (isQuitting) return;
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isMinimized()) {
+        mainWindow.restore();
+        if (state.settings.alwaysOnTop) mainWindow.setAlwaysOnTop(true, 'floating');
+      }
+    }, 50);
   });
 
   // Closing the window hides it to the tray (unless the user turned that off).
@@ -349,25 +576,24 @@ function createWindow() {
   });
 }
 
-// When the window is dragged near a screen corner, clamp it into that corner.
+// When the window is dragged near a screen edge or corner, clamp it there.
 function snapToCorner() {
   if (!mainWindow || !state.settings.snapToCorners || state.settings.locked) return;
   const b = mainWindow.getBounds();
   const area = screen.getDisplayMatching(b).workArea;
-  const T = 48;  // how close to a corner before it snaps
+  const T = 60;  // how close to an edge before it snaps
   const M = 8;   // gap left between the window and the screen edges
 
-  const nearLeft = (b.x - area.x) <= T;
-  const nearRight = (area.x + area.width - (b.x + b.width)) <= T;
-  const nearTop = (b.y - area.y) <= T;
-  const nearBottom = (area.y + area.height - (b.y + b.height)) <= T;
+  let x = b.x;
+  let y = b.y;
+  if (b.x - area.x <= T) x = area.x + M;
+  else if (area.x + area.width - (b.x + b.width) <= T) x = area.x + area.width - b.width - M;
+  if (b.y - area.y <= T) y = area.y + M;
+  else if (area.y + area.height - (b.y + b.height) <= T) y = area.y + area.height - b.height - M;
 
-  // Only snap at actual corners (near one vertical AND one horizontal edge).
-  if ((nearLeft || nearRight) && (nearTop || nearBottom)) {
-    const x = Math.round(nearLeft ? area.x + M : area.x + area.width - b.width - M);
-    const y = Math.round(nearTop ? area.y + M : area.y + area.height - b.height - M);
-    if (b.x !== x || b.y !== y) mainWindow.setPosition(x, y, false);
-  }
+  x = Math.round(x);
+  y = Math.round(y);
+  if (x !== b.x || y !== b.y) mainWindow.setPosition(x, y, false);
 }
 
 function showWindow() {
@@ -516,6 +742,10 @@ function registerIpc() {
       state.settings.clickupDone = state.settings.clickupDone || {};
       if (task.done) state.settings.clickupDone[task.clickupId] = task.completedAt;
       else delete state.settings.clickupDone[task.clickupId];
+    } else if (task.source === 'classroom') {
+      state.settings.classroomDone = state.settings.classroomDone || {};
+      if (task.done) state.settings.classroomDone[task.classroomId] = task.completedAt;
+      else delete state.settings.classroomDone[task.classroomId];
     } else if (!task.done) {
       task.notifiedDueSoon = false;
       task.notifiedOverdue = false;
@@ -555,6 +785,20 @@ function registerIpc() {
 
   ipcMain.handle('sync-clickup', () => syncClickUp());
   ipcMain.handle('fetch-github', () => getGitHub());
+  ipcMain.handle('classroom-connect', async () => {
+    const r = await classroomConnect();
+    if (r.ok) await syncClassroom();
+    return r;
+  });
+  ipcMain.handle('classroom-sync', () => syncClassroom());
+  ipcMain.handle('classroom-disconnect', () => {
+    state.settings.classroomRefreshToken = '';
+    state.settings.classroomDone = {};
+    gcAccessToken = null; gcAccessExpiry = 0;
+    state.tasks = state.tasks.filter((t) => t.source !== 'classroom');
+    commit();
+    return { ok: true };
+  });
   ipcMain.handle('open-external', (_e, url) => {
     if (url) shell.openExternal(url);
   });
@@ -575,7 +819,7 @@ function registerIpc() {
   });
 
   // Window controls
-  ipcMain.on('win-minimize', () => mainWindow && mainWindow.minimize());
+  ipcMain.on('win-minimize', () => { if (mainWindow) { userMinimizing = true; mainWindow.minimize(); } });
   ipcMain.on('win-hide', () => mainWindow && mainWindow.hide());
   ipcMain.handle('win-toggle-top', () => {
     return applySetting('alwaysOnTop', !state.settings.alwaysOnTop).settings.alwaysOnTop;
@@ -608,9 +852,13 @@ if (!gotLock) {
     runNotificationCheck();
     tickTimer = setInterval(runNotificationCheck, TICK_MS);
 
-    // Pull ClickUp tasks on launch and every 10 minutes (if a token is set).
+    // Pull ClickUp + Classroom tasks on launch and every 10 minutes (if connected).
     if (state.settings.clickupToken) syncClickUp();
-    setInterval(() => { if (state.settings.clickupToken) syncClickUp(); }, 10 * 60 * 1000);
+    if (state.settings.classroomRefreshToken) syncClassroom();
+    setInterval(() => {
+      if (state.settings.clickupToken) syncClickUp();
+      if (state.settings.classroomRefreshToken) syncClassroom();
+    }, 10 * 60 * 1000);
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

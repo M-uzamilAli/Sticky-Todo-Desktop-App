@@ -14,6 +14,7 @@ let settings = { theme: 'light', alwaysOnTop: false, startAtLogin: false };
 // --- View state (renderer-only) ---
 let currentTab = 'active';     // active | done | all
 let currentFilter = 'all';     // all | week | urgent (urgent set via the strip)
+let currentSource = 'all';     // all | personal | clickup | classroom
 let quickWhen = 'today';       // quick-add deadline chip: today | tomorrow | custom
 let weekOffset = 0;            // for the "Week window" filter
 let focusId = null;            // task being focused, or null
@@ -28,6 +29,7 @@ let workTimer = null;          // interval handle for the live timer
 let compact = false;           // compact summary view (chrome stripped)
 let prevTab = null;            // tab/filter to restore when leaving compact
 let prevFilter = null;
+let addOpen = false;           // quick-add input expanded? (collapsed = dim "+")
 
 let lastAction = null;         // for undo: { type, task }
 let toastTimer = null;
@@ -267,8 +269,14 @@ function sortTasks(list) {
   });
 }
 
+function passesSource(task) {
+  if (currentSource === 'all') return true;
+  if (currentSource === 'personal') return !task.source;
+  return task.source === currentSource; // 'clickup' | 'classroom'
+}
+
 function visibleTasks() {
-  return sortTasks(tasks.filter((t) => passesTab(t) && passesFilter(t)));
+  return sortTasks(tasks.filter((t) => passesTab(t) && passesFilter(t) && passesSource(t)));
 }
 
 /* ------------------------------------------------------------------ */
@@ -365,17 +373,16 @@ function effectiveTheme() {
 function renderChrome() {
   const theme = effectiveTheme();
   document.documentElement.setAttribute('data-theme', theme);
-  el('themeBtn').textContent = theme === 'dark' ? '☀️' : '🌙';
-  el('pinBtn').classList.toggle('is-on', !!settings.alwaysOnTop);
 
-  // Lock reflects in the button and disables the titlebar drag region.
-  el('lockBtn').textContent = settings.locked ? '🔒' : '🔓';
-  el('lockBtn').classList.toggle('is-on', !!settings.locked);
-  el('lockBtn').title = settings.locked ? 'Unlock position' : 'Lock position';
+  // ⋮ menu item states
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  el('themeState').textContent = cap(settings.theme || 'light');
+  el('pinState').textContent = settings.alwaysOnTop ? '✓' : '';
+  el('lockState').textContent = settings.locked ? '✓' : '';
   document.body.classList.toggle('locked', !!settings.locked);
 
   // Integration buttons appear only when configured
-  el('syncBtn').hidden = !settings.clickupToken;
+  el('syncBtn').hidden = !(settings.clickupToken || settings.classroomRefreshToken);
   el('githubBtn').hidden = !settings.githubToken;
 
   // Unread "For Me" count badge on the GitHub button
@@ -387,17 +394,38 @@ function renderChrome() {
 
   // Compact summary view
   el('note').classList.toggle('compact', compact);
-  el('compactBtn').classList.toggle('is-on', compact);
-  el('compactBtn').title = compact ? 'Full view' : 'Compact view';
+  el('compactState').textContent = compact ? '✓' : '';
 
-  // Tab counts
+  // Count on Active only — Done/All numbers don't help you glance at what's due.
   el('countActive').textContent = tasks.filter((t) => !t.done).length || '';
-  el('countDone').textContent = tasks.filter((t) => t.done).length || '';
-  el('countAll').textContent = tasks.length || '';
 
   // Filter pills reflect state ('urgent' highlights none)
   document.querySelectorAll('.filter').forEach((b) =>
     b.classList.toggle('is-active', b.dataset.filter === currentFilter));
+
+  // Filter toggle shows a dot when a non-default filter/source is applied.
+  const filtersActive = currentFilter === 'week' || currentSource !== 'all';
+  el('filterToggle').classList.toggle('is-active', filtersActive);
+
+  // Source filter — shown only when imported tasks actually exist to filter
+  const hasCU = tasks.some((t) => t.source === 'clickup');
+  const hasGC = tasks.some((t) => t.source === 'classroom');
+  el('sourceGroup').hidden = !(hasCU || hasGC);
+
+  // Per-source counts within the current tab
+  const inTab = tasks.filter(passesTab);
+  el('scAll').textContent = inTab.length || '';
+  el('scPersonal').textContent = inTab.filter((t) => !t.source).length || '';
+  el('scClickup').textContent = inTab.filter((t) => t.source === 'clickup').length || '';
+  el('scClassroom').textContent = inTab.filter((t) => t.source === 'classroom').length || '';
+  document.querySelector('.source[data-source="clickup"]').hidden = !hasCU;
+  document.querySelector('.source[data-source="classroom"]').hidden = !hasGC;
+  // If the selected source is no longer available, fall back to All.
+  if ((currentSource === 'clickup' && !hasCU) || (currentSource === 'classroom' && !hasGC)) {
+    currentSource = 'all';
+  }
+  document.querySelectorAll('.source').forEach((b) =>
+    b.classList.toggle('is-active', b.dataset.source === currentSource));
 
   // Week range stepper
   weekNav.hidden = currentFilter !== 'week';
@@ -468,12 +496,13 @@ function buildTaskRow(task) {
   row.className = 'task';
   row.dataset.id = task.id;
 
-  const isCU = task.source === 'clickup';
+  const isImported = task.source === 'clickup' || task.source === 'classroom';
+  const sourceLabel = task.source === 'classroom' ? 'Classroom' : 'ClickUp';
   const u = task.done ? 'done' : urgency(task);
   if (u === 'overdue') row.classList.add('overdue');  // red accent
   if (u === 'today') row.classList.add('today');      // amber accent
   if (task.done) row.classList.add('done');
-  if (isCU) row.classList.add('imported');
+  if (isImported) row.classList.add('imported');
 
   // Checkbox (works for local and imported tasks; imported "done" persists via the sync map)
   const lead = document.createElement('button');
@@ -500,14 +529,14 @@ function buildTaskRow(task) {
   } else {
     const d = listDeadline(task);
     meta.className = 'task-meta' + (d.cls ? ' ' + d.cls : '');
-    meta.textContent = isCU ? (d.text + ' · ClickUp') : d.text;
+    meta.textContent = isImported ? (d.text + ' · ' + sourceLabel) : d.text;
   }
   main.append(title, meta);
 
   row.append(lead, main);
 
   // Drag grip (local open tasks only; revealed on hover via CSS)
-  if (!task.done && !isCU) {
+  if (!task.done && !isImported) {
     const grip = document.createElement('span');
     grip.className = 'grip';
     grip.textContent = '⠿';
@@ -534,7 +563,8 @@ function buildSummary(task) {
   focusBody.innerHTML = '';
   focusFooter.innerHTML = '';
   const u = task.done ? 'done' : urgency(task);
-  const isCU = task.source === 'clickup';
+  const isCU = task.source === 'clickup' || task.source === 'classroom';
+  const sourceLabel = task.source === 'classroom' ? 'Classroom' : 'ClickUp';
 
   /* ---- Zone 1: info card (title → deadline → description) ---- */
   const card = document.createElement('div');
@@ -599,7 +629,7 @@ function buildSummary(task) {
   if (isCU) {
     const src = document.createElement('div');
     src.className = 'fx-source';
-    src.textContent = task.listName ? `ClickUp · ${task.listName}` : 'ClickUp';
+    src.textContent = task.listName ? `${sourceLabel} · ${task.listName}` : sourceLabel;
     card.append(src);
   }
 
@@ -627,7 +657,7 @@ function buildSummary(task) {
   secondBtn.className = 'btn-quiet';
   if (isCU) {
     secondBtn.textContent = 'Open';
-    secondBtn.title = 'Open in ClickUp';
+    secondBtn.title = 'Open in ' + sourceLabel;
     secondBtn.addEventListener('click', () => { if (task.url) api.openExternal(task.url); });
   } else {
     secondBtn.textContent = 'Edit';
@@ -658,7 +688,7 @@ function buildSummary(task) {
   const added = document.createElement('span');
   added.className = 'fx-added';
   if (isCU) {
-    added.textContent = 'Managed in ClickUp';
+    added.textContent = 'Managed in ' + sourceLabel;
   } else {
     let addedText = 'Added ' + shortDate(new Date(task.createdAt));
     if (task.done && task.completedAt) addedText += ' · Done ' + shortDate(new Date(task.completedAt));
@@ -825,8 +855,26 @@ async function addFromQuickAdd(e) {
   if (s && !s.error) {
     el('qaTitle').value = '';
     refresh(s);
-    el('qaTitle').focus();   // keep focus so several can be added in a row
+    openAdd();               // keep the bar open so several can be added in a row
   }
+}
+
+// Expand the collapsed "+" into the full add bar and focus the field.
+function openAdd() {
+  addOpen = true;
+  el('qaMain').hidden = false;
+  el('qaOpen').hidden = true;
+  qaChips.hidden = false;
+  el('qaTitle').focus();
+}
+
+// Collapse back to the dim "+" and clear any half-set deadline.
+function closeAdd() {
+  addOpen = false;
+  el('qaMain').hidden = true;
+  qaChips.hidden = true;
+  el('qaOpen').hidden = false;
+  resetQuickDefaults();
 }
 
 /* ------------------------------------------------------------------ */
@@ -870,6 +918,13 @@ function renderSettings() {
   el('setHideTaskbar').checked = !!settings.hideFromTaskbar;
   el('setNotifications').checked = !!settings.notifications;
   el('setClickupToken').value = settings.clickupToken || '';
+  const gcConnected = !!settings.classroomRefreshToken;
+  el('btnGcConnect').textContent = gcConnected ? 'Reconnect' : 'Connect with Google';
+  el('btnGcDisconnect').hidden = !gcConnected;
+  // If the sign-in expired (no token but imported tasks remain), prompt a reconnect.
+  if (!gcConnected && tasks.some((t) => t.source === 'classroom')) {
+    el('gcStatus').textContent = 'Classroom sign-in expired — reconnect to refresh your assignments.';
+  }
 }
 
 function setSegment(containerId, value) {
@@ -1140,6 +1195,11 @@ function setFilter(filter) {
   render();
 }
 
+function setSource(source) {
+  currentSource = source;
+  render();
+}
+
 // Clicking the strip shows just the urgent tasks (overdue + due today).
 function showUrgent() {
   const hasUrgent = tasks.some((t) => !t.done &&
@@ -1150,6 +1210,7 @@ function showUrgent() {
   showGithub = false;
   showAbout = false;
   focusId = null;
+  currentSource = 'all';  // urgent view spans every source
   currentTab = 'active';
   document.querySelectorAll('.tab').forEach((b) =>
     b.classList.toggle('is-active', b.dataset.tab === 'active'));
@@ -1162,7 +1223,27 @@ function showUrgent() {
 /* ------------------------------------------------------------------ */
 function wire() {
   // Window controls
+  // ⋮ overflow menu open/close
+  el('moreBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    el('moreMenu').hidden = !el('moreMenu').hidden;
+  });
+  document.addEventListener('click', (e) => {
+    if (!el('moreMenu').hidden && !el('moreMenu').contains(e.target) && e.target !== el('moreBtn')) {
+      el('moreMenu').hidden = true;
+    }
+  });
+  // Any menu item closes the menu after it runs.
+  el('moreMenu').querySelectorAll('.menu-item').forEach((b) =>
+    b.addEventListener('click', () => { el('moreMenu').hidden = true; }));
+
+  // Filter toggle — reveal the filter/source row only when wanted.
+  el('filterToggle').addEventListener('click', () => {
+    el('filterPanel').hidden = !el('filterPanel').hidden;
+  });
+
   el('compactBtn').addEventListener('click', () => {
+    el('moreMenu').hidden = true;  // compact strips chrome; close the menu
     compact = !compact;
     if (compact) {
       // Compact shows ALL tasks; remember the current tab/filter to restore later.
@@ -1202,15 +1283,25 @@ function wire() {
   el('lockBtn').addEventListener('click', () => applySettingAndRender('locked', !settings.locked));
   el('syncBtn').addEventListener('click', async () => {
     showToast('Syncing…');
-    const r = await api.syncClickup();
-    if (r && r.ok) {
-      const s = await api.getState();
-      if (s && !s.error) { tasks = s.tasks; settings = s.settings; }
-      render();
-      showToast(`Synced ${r.count} task${r.count === 1 ? '' : 's'}`);
-    } else {
-      showToast('Sync failed');
+    const parts = [];
+    let failed = false, expiredMsg = null;
+    if (settings.clickupToken) {
+      const r = await api.syncClickup();
+      if (r && r.ok) parts.push(`ClickUp ${r.count}`); else failed = true;
     }
+    if (settings.classroomRefreshToken) {
+      const r = await api.classroomSync();
+      if (r && r.ok) parts.push(`Classroom ${r.count}`);
+      else { failed = true; if (r && r.expired) expiredMsg = 'Classroom sign-in expired — reconnect in Settings'; }
+    }
+    const s = await api.getState();
+    if (s && !s.error) { tasks = s.tasks; settings = s.settings; }
+    render();
+    let msg;
+    if (expiredMsg) msg = expiredMsg;
+    else if (!parts.length) msg = failed ? 'Sync failed' : 'Nothing to sync';
+    else msg = 'Synced ' + parts.join(' · ') + (failed ? ' (some errors)' : '');
+    showToast(msg);
   });
 
   // Tabs
@@ -1223,6 +1314,10 @@ function wire() {
   el('weekPrev').addEventListener('click', () => { weekOffset--; render(); });
   el('weekNext').addEventListener('click', () => { weekOffset++; render(); });
   el('weekLabel').addEventListener('click', () => { weekOffset = 0; render(); });
+
+  // Source filter
+  document.querySelectorAll('.source').forEach((b) =>
+    b.addEventListener('click', () => setSource(b.dataset.source)));
 
   // Strip -> show all urgent tasks
   strip.addEventListener('click', showUrgent);
@@ -1239,18 +1334,19 @@ function wire() {
   let qaBlurTimer = null;
   let qaPickerOpen = false;
 
+  el('qaOpen').addEventListener('click', openAdd);
+
   quickAdd.addEventListener('focusin', () => {
     clearTimeout(qaBlurTimer);
-    qaChips.hidden = false;
+    if (addOpen) qaChips.hidden = false;
   });
   quickAdd.addEventListener('focusout', () => {
     clearTimeout(qaBlurTimer);
     qaBlurTimer = setTimeout(() => {
-      if (qaPickerOpen) return;                          // a date/time picker is open — keep chips
+      if (qaPickerOpen) return;                          // a date/time picker is open — keep open
       if (quickAdd.contains(document.activeElement)) return; // focus still in the bar
       if (el('qaTitle').value.trim()) return;            // mid-typing a task
-      qaChips.hidden = true;
-      resetQuickDefaults();                              // clear stale date/time selection
+      closeAdd();                                        // collapse back to the dim "+"
     }, 200);
   });
 
@@ -1317,6 +1413,24 @@ function wire() {
   });
   el('btnOpenFolder').addEventListener('click', () => api.openDataFolder());
 
+  // Settings — Google Classroom (built-in app credentials; users just sign in)
+  el('btnGcConnect').addEventListener('click', async () => {
+    const status = el('gcStatus');
+    status.textContent = 'Opening Google sign-in in your browser…';
+    const r = await api.classroomConnect();
+    const s = await api.getState();
+    if (s && !s.error) { tasks = s.tasks; settings = s.settings; }
+    render();
+    status.textContent = r.ok ? 'Connected to Google Classroom.' : ('Connect failed: ' + (r.error || 'unknown error'));
+  });
+  el('btnGcDisconnect').addEventListener('click', async () => {
+    const r = await api.classroomDisconnect();
+    const s = await api.getState();
+    if (s && !s.error) { tasks = s.tasks; settings = s.settings; }
+    render();
+    el('gcStatus').textContent = 'Disconnected from Google Classroom.';
+  });
+
   // Settings — ClickUp
   el('setClickupToken').addEventListener('change', (e) =>
     applySettingAndRender('clickupToken', e.target.value.trim()));
@@ -1353,6 +1467,9 @@ function wire() {
     const typing = /INPUT|TEXTAREA/.test(document.activeElement.tagName);
 
     if (e.key === 'Escape') {
+      if (!el('moreMenu').hidden) { el('moreMenu').hidden = true; return; }
+      if (addOpen) { closeAdd(); return; }
+      if (!el('filterPanel').hidden) { el('filterPanel').hidden = true; return; }
       if (workId) stopWork();
       else if (showAbout) closeAbout();
       else if (showGithub) closeGithub();
@@ -1361,9 +1478,18 @@ function wire() {
       return;
     }
 
+    // "n" opens the collapsed add bar (when not already typing and on the list).
+    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'n') {
+      if (!showSettings && !showGithub && !showAbout && !focusId && !workId) {
+        e.preventDefault();
+        openAdd();
+        return;
+      }
+    }
+
     if (e.key === 'Delete' && focusId && !typing) {
       const t = tasks.find((x) => x.id === focusId);
-      if (t && t.source !== 'clickup') onDelete(t); // imported tasks can't be deleted locally
+      if (t && t.source !== 'clickup' && t.source !== 'classroom') onDelete(t); // imported tasks can't be deleted locally
       return;
     }
 
