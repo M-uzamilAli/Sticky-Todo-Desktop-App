@@ -1,6 +1,6 @@
 {
   "name": "sticky-todo",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A minimal sticky-note style desktop to-do widget built with Electron.",
   "main": "src/main/main.js",
   "author": "",

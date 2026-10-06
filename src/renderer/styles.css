@@ -254,12 +254,12 @@ body.locked .topbar { -webkit-app-region: no-drag; }
   margin: 0 2px 5px;
 }
 .filters {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; flex-wrap: nowrap; gap: 6px;
   flex: 0 0 auto;
 }
 .filter {
-  height: 26px; padding: 0 12px;
-  font-size: 11px;
+  height: 26px; padding: 0 8px;
+  font-size: 11px; white-space: nowrap; flex: 0 0 auto;
   border-radius: var(--radius-sm);
   color: var(--text-soft);
   border: 1px solid transparent;
@@ -296,17 +296,22 @@ body.locked .topbar { -webkit-app-region: no-drag; }
   border-color: var(--text-soft);
 }
 
-.week-nav { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+/* Stepper takes the Week chip's place and absorbs the leftover space, so the row
+   stays on one line at any width — the label ellipsizes before anything wraps. */
+.week-nav { display: flex; align-items: center; justify-content: center; gap: 0;
+  flex: 1 1 0; min-width: 0; }
 .week-arrow {
-  width: 24px; height: 26px; border-radius: var(--radius-sm); font-size: 15px;
+  flex: 0 0 auto;
+  width: 18px; height: 26px; border-radius: var(--radius-sm); font-size: 13px;
   color: var(--text-soft);
   transition: background var(--speed), color var(--speed);
 }
 .week-arrow:hover { background: var(--bg-raised); color: var(--text); }
 .week-label {
   font-size: 11px; color: var(--text);
-  min-width: 96px; text-align: center;
-  height: 26px; padding: 0 6px; border-radius: var(--radius-sm);
+  min-width: 0; text-align: center; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  height: 26px; padding: 0 2px; border-radius: var(--radius-sm);
   transition: background var(--speed);
 }
 .week-label:hover { background: var(--bg-raised); }

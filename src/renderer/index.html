@@ -49,8 +49,8 @@
       <div class="tabrow">
         <nav class="tabs" id="tabs">
           <button class="tab is-active" data-tab="active">Active <span class="tab-count" id="countActive"></span></button>
-          <button class="tab" data-tab="done">Done</button>
-          <button class="tab" data-tab="all">All</button>
+          <button class="tab" data-tab="done">Done <span class="tab-count" id="countDone"></span></button>
+          <button class="tab" data-tab="all">All <span class="tab-count" id="countAll"></span></button>
         </nav>
         <button class="filter-toggle" id="filterToggle" title="Filters" aria-label="Filters">Filter</button>
       </div>
@@ -61,6 +61,8 @@
           <span class="filter-cap">Timeline</span>
           <div class="filters" id="filters">
             <button class="filter is-active" data-filter="all">All</button>
+            <button class="filter" data-filter="today">Today</button>
+            <button class="filter" data-filter="recent">Last 7d</button>
             <button class="filter" data-filter="week">Week</button>
             <div class="week-nav" id="weekNav" hidden>
               <button class="week-arrow" id="weekPrev" aria-label="Previous week">‹</button>
@@ -202,7 +204,7 @@
         <h3 class="set-group">About</h3>
         <div class="set-stack">
           <button class="set-btn" id="btnAbout">About · Credits</button>
-          <p class="set-note">Sticky Todo v1.0.2 — made by Muzamil Ali</p>
+          <p class="set-note">Sticky Todo v1.0.3 — made by Muzamil Ali</p>
         </div>
       </div>
     </section>
@@ -223,7 +225,7 @@
             <path d="M84 120 l26 28 l50 -58" fill="none" stroke="#3a3320" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <div class="about-app">Sticky Todo</div>
-          <div class="about-ver">Version 1.0.2</div>
+          <div class="about-ver">Version 1.0.3</div>
         </div>
 
         <p class="about-blurb">A glance surface for the day. Personal notes with real deadlines, plus your ClickUp tasks and GitHub PRs, in one small always-on sticky.</p>

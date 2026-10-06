@@ -12,7 +12,7 @@ your assigned **ClickUp** tasks and **GitHub** PRs & comments, so the answer to
 
 Grab the latest Windows installer from the
 **[Releases page](https://github.com/M-uzamilAli/Sticky-Todo-Desktop-App/releases/latest)**
-(`Sticky Todo Setup 1.0.2.exe`). Run it, and the app lives in your system tray.
+(`Sticky Todo Setup 1.0.3.exe`). Run it, and the app lives in your system tray.
 
 ---
 
@@ -148,7 +148,7 @@ npm run make-icons
 npm run dist
 ```
 
-The NSIS installer is produced in **`release/`** (e.g. `Sticky Todo Setup 1.0.2.exe`).
+The NSIS installer is produced in **`release/`** (e.g. `Sticky Todo Setup 1.0.3.exe`).
 Build is configured for a smaller footprint: single `en-US` locale, `asar` packaging,
 and maximum compression. Replace `build/icon.png` / `build/tray.png` with your own
 256×256 / 32×32 PNGs to rebrand.

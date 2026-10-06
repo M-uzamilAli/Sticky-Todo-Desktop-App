@@ -90,6 +90,16 @@ function startOfToday() {
   return d;
 }
 
+// Rolling window: the last 7 days, from the start of 6 days ago through end of today.
+function recentRange() {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  start.setDate(start.getDate() - 6);
+  start.setHours(0, 0, 0, 0);
+  return { start, end };
+}
+
 // Monday-based week range, shifted by `offset` weeks.
 function weekRange(offset) {
   const now = new Date();
@@ -108,6 +118,13 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
 
 function shortDate(d) {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+
+// Compact range for the week stepper: "Oct 5–11" (same month) or "Oct 28–Nov 3".
+function rangeLabel(start, end) {
+  return start.getMonth() === end.getMonth()
+    ? `${MONTHS[start.getMonth()]} ${start.getDate()}–${end.getDate()}`
+    : `${shortDate(start)}–${shortDate(end)}`;
 }
 
 function fullDate(d) {
@@ -245,6 +262,13 @@ function passesFilter(task) {
   }
   const due = effectiveDeadline(task);
   if (!due) return false;
+  if (currentFilter === 'today') {
+    return startOfDay(due).getTime() === startOfToday().getTime();
+  }
+  if (currentFilter === 'recent') {
+    const r = recentRange();
+    return due >= r.start && due <= r.end;
+  }
   const range = weekRange(weekOffset);
   return due >= range.start && due <= range.end;
 }
@@ -396,15 +420,21 @@ function renderChrome() {
   el('note').classList.toggle('compact', compact);
   el('compactState').textContent = compact ? '✓' : '';
 
-  // Count on Active only — Done/All numbers don't help you glance at what's due.
-  el('countActive').textContent = tasks.filter((t) => !t.done).length || '';
+  // Show a count only on the currently selected tab — the other tabs' numbers are
+  // just noise. In the overdue/urgent drill-down even the Active count is dropped.
+  const activeCount = tasks.filter((t) => !t.done).length;
+  const doneCount = tasks.filter((t) => t.done).length;
+  el('countActive').textContent =
+    (currentTab === 'active' && currentFilter !== 'urgent') ? (activeCount || '') : '';
+  el('countDone').textContent = currentTab === 'done' ? (doneCount || '') : '';
+  el('countAll').textContent = currentTab === 'all' ? (tasks.length || '') : '';
 
   // Filter pills reflect state ('urgent' highlights none)
   document.querySelectorAll('.filter').forEach((b) =>
     b.classList.toggle('is-active', b.dataset.filter === currentFilter));
 
   // Filter toggle shows a dot when a non-default filter/source is applied.
-  const filtersActive = currentFilter === 'week' || currentSource !== 'all';
+  const filtersActive = currentFilter !== 'all' || currentSource !== 'all';
   el('filterToggle').classList.toggle('is-active', filtersActive);
 
   // Source filter — shown only when imported tasks actually exist to filter
@@ -412,12 +442,13 @@ function renderChrome() {
   const hasGC = tasks.some((t) => t.source === 'classroom');
   el('sourceGroup').hidden = !(hasCU || hasGC);
 
-  // Per-source counts within the current tab
-  const inTab = tasks.filter(passesTab);
-  el('scAll').textContent = inTab.length || '';
-  el('scPersonal').textContent = inTab.filter((t) => !t.source).length || '';
-  el('scClickup').textContent = inTab.filter((t) => t.source === 'clickup').length || '';
-  el('scClassroom').textContent = inTab.filter((t) => t.source === 'classroom').length || '';
+  // Per-source counts within the current tab AND timeline filter (so Week/Last 7d
+  // narrow these numbers too), independent of which source is selected.
+  const inScope = tasks.filter((t) => passesTab(t) && passesFilter(t));
+  el('scAll').textContent = inScope.length || '';
+  el('scPersonal').textContent = inScope.filter((t) => !t.source).length || '';
+  el('scClickup').textContent = inScope.filter((t) => t.source === 'clickup').length || '';
+  el('scClassroom').textContent = inScope.filter((t) => t.source === 'classroom').length || '';
   document.querySelector('.source[data-source="clickup"]').hidden = !hasCU;
   document.querySelector('.source[data-source="classroom"]').hidden = !hasGC;
   // If the selected source is no longer available, fall back to All.
@@ -427,11 +458,15 @@ function renderChrome() {
   document.querySelectorAll('.source').forEach((b) =>
     b.classList.toggle('is-active', b.dataset.source === currentSource));
 
-  // Week range stepper
+  // Week range stepper. When Week is active it takes the Week chip's place: the
+  // chip hides and the stepper shows inline, so nothing wraps. Clicking any other
+  // chip (All / Last 7d) switches the filter and the Week chip comes back.
+  const weekBtn = document.querySelector('.filter[data-filter="week"]');
   weekNav.hidden = currentFilter !== 'week';
+  if (weekBtn) weekBtn.hidden = currentFilter === 'week';
   if (currentFilter === 'week') {
     const r = weekRange(weekOffset);
-    weekLabel.textContent = `${shortDate(r.start)} – ${shortDate(r.end)}`;
+    weekLabel.textContent = rangeLabel(r.start, r.end);
   }
 }
 
@@ -485,6 +520,8 @@ function renderList() {
 
 function emptyMessage() {
   if (currentFilter === 'urgent') return 'Nothing urgent right now.';
+  if (currentFilter === 'today') return 'Nothing due today.';
+  if (currentFilter === 'recent') return 'Nothing due in the last 7 days.';
   if (currentFilter === 'week') return 'Nothing due this week.';
   if (currentTab === 'done') return 'No completed tasks yet.';
   if (currentTab === 'active') return 'Nothing due — add a task below.';
@@ -1215,6 +1252,7 @@ function showUrgent() {
   document.querySelectorAll('.tab').forEach((b) =>
     b.classList.toggle('is-active', b.dataset.tab === 'active'));
   currentFilter = 'urgent';
+  el('filterPanel').hidden = true; // collapse the filter panel when drilling into urgent
   render();
 }
 
